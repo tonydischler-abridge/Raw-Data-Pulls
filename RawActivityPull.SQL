@@ -1,43 +1,109 @@
-SELECT
-    ser.PROV_ID as provider_id
-    , ser2.NPI as npi 
-    , ser.PROV_TYPE as provider_type
-    , ser.IS_RESIDENT as is_resident
-    , ser.USER_ID as user_id
-    , ser.UPIN as upin
-    , ser.EMP_STATUS as employment_status
-    , ser.CLINICIAN_TITLE as clinician_title
-    , ser.REFERRAL_SOURCE_TYPE as referral_source_type
-    , ser.BILL_PROV_YN as billing_provider_yn
-    , ser.RECORD_TYPE as record_type
-    , ser.DEA_NUMBER as dea_number
-    , ser.EMAIL  as email
-    , ser.NURSE_EMP_ID as nurse_employee_id
-    , ser.PRACTICE_NAME_C as practice_name_code
-    , zon.NAME as practice_name
-    , ser. REVENUE_DEPT_ID as revenue_department_id
-    , ser.PROVIDER_TYPE_C as provider_type_code
-    , zpt.NAME as provider_type_name
-    , ser2.PRIMARY_DEPT_ID as primary_department_id
-    , ser3.DEPARTURE_DATE as departure_date
-    , adr.EXT_PRACTICE_NAME as external_practice_name
-    , emp4.HR_SYSTEM_DEPT as hr_system_department
-    , emp4.HR_SYSTEM_JOB_CODE as hr_system_job_code
-    , map.CID as ser_cid
-FROM CLARITY_SER ser
-LEFT JOIN CLARITY_SER_2 ser2 
-    on ser2.PROV_ID = ser.PROV_ID
-LEFT JOIN ZC_PRACTICE_NAME zpn
-    on zpn.PRACTICE_NAME_C = ser.PRACTICE_NAME_C
-LEFT JOIN ZC_PROVIDER_TYPE zpt
-    on zpt.PROVIDER_TYPE_C = ser.PROVIDER_TYPE_C
-LEFT JOIN CLARITY_SER_3 ser3 
-    on ser3.PROV_ID = ser.PROV_ID
-LEFT JOIN CLARITY_SER_ADDR adr 
-    on adr.PROV_ID = ser.PROV_ID
-LEFT JOIN CLARITY_EMP_4 emp4
-    on emp4.USER_ID = ser.USER_ID
-LEFT JOIN SER_MAP map 
-    on map.PROV_ID = ser.PROV_ID
-WHERE ser.PROV_TYPE <> 0 -- include all non-resources
+WITH
+DATE_PARAMS AS (
+    SELECT
+            CAST('2023-04-01' AS date) AS START_DATE,
+            DATEADD(DAY, -1, CAST(GETDATE() AS date)) AS END_DATE
+),
 
+date_filtered_enc AS (
+    SELECT 
+        e.PAT_ENC_CSN_ID, 
+        e.CONTACT_DATE
+    FROM PAT_ENC e
+    CROSS JOIN DATE_PARAMS dp
+    WHERE e.CONTACT_DATE >= dp.START_DATE
+        AND e.CONTACT_DATE <= dp.END_DATE
+        AND e.ENC_TYPE_C IN (3,76,101) -- hospital, telemedicine, and office visit -- update as needed
+        AND (e.APPT_STATUS_C IN (2,6) OR e.APPT_STATUS_C IS NULL)
+),
+
+AMBIENT_VIA_SDE AS (
+    SELECT DISTINCT e.PAT_ENC_CSN_ID
+    FROM date_filtered_enc e
+    WHERE EXISTS (
+        SELECT 1
+        FROM SMRTDTA_ELEM_DATA  sde
+        INNER JOIN SMRTDTA_ELEM_VALUE sev
+            ON sev.HLV_ID = sde.HLV_ID
+        WHERE sde.CONTACT_SERIAL_NUM = e.PAT_ENC_CSN_ID
+            AND sde.ELEMENT_ID IN (
+                'EPIC#31000231848','EPIC#31000231852'
+            )
+    )
+),
+
+AMBIENT_VIA_NAS AS (
+    SELECT DISTINCT e.PAT_ENC_CSN_ID
+    FROM date_filtered_enc e
+    WHERE EXISTS (
+        SELECT 1
+        FROM HNO_INFO hno
+        INNER JOIN NOTE_AMBIENT_SECTIONS nas
+            ON nas.NOTE_ID = hno.NOTE_ID
+        WHERE hno.PAT_ENC_CSN_ID = e.PAT_ENC_CSN_ID
+            AND nas.AMBIENT_SESSION_IDENT IS NOT NULL
+    )
+),
+
+AMBIENT_VIA_ATTR AS (
+    SELECT DISTINCT e.PAT_ENC_CSN_ID
+    FROM date_filtered_enc e
+    WHERE EXISTS (
+        SELECT 1
+        FROM HNO_INFO hno
+        INNER JOIN NOTE_ATTRIBUTION na
+            ON na.NOTE_ID = hno.NOTE_ID
+        WHERE hno.PAT_ENC_CSN_ID = e.PAT_ENC_CSN_ID
+            AND na.NOTEATTR_SOURCE_C = 25
+    )
+),
+
+AMBIENT_VIA_DXR AS (
+    SELECT DISTINCT e.PAT_ENC_CSN_ID
+    FROM date_filtered_enc e
+    WHERE EXISTS (
+        SELECT 1
+        FROM DOCS_RCVD_DETAILS d
+        INNER JOIN DOCS_RCVD_NOTE_SECTIONS n
+            ON n.DOCUMENT_ID = d.DOCUMENT_ID
+        WHERE d.DOCUMENT_RQST_CSN = e.PAT_ENC_CSN_ID
+            AND d.DOCUMENT_RQST_CSN IS NOT NULL
+    )
+),
+
+ALL_AMBIENT AS (
+    SELECT PAT_ENC_CSN_ID FROM AMBIENT_VIA_SDE
+    UNION
+    SELECT PAT_ENC_CSN_ID FROM AMBIENT_VIA_NAS
+    UNION
+    SELECT PAT_ENC_CSN_ID FROM AMBIENT_VIA_ATTR
+    UNION
+    SELECT PAT_ENC_CSN_ID FROM AMBIENT_VIA_DXR
+)
+
+SELECT 
+    uah.USER_ID
+    , uah.PAT_ENC_CSN_ID
+    , CASE WHEN uah.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG
+    , uah.ACTIVITY_ID
+    , uah.ACTIVITY_HOUR_DTTM
+    , uah.ACTIVITY_HOUR_UTC_DTTM
+    , uah.WORKSPACE_KIND
+    , uah.WORKSPACE_SUBKIND
+    , uah.HISTORY_POINT_INI
+    , uah.HISTORY_POINT_ID
+    , uah.HISTORY_POINT_ITEM
+    , uah.NUMBER_OF_SECONDS_ACTIVE
+    , uah.NUMBER_OF_SECONDS_ACTIVE_Q1
+    , uah.NUMBER_OF_SECONDS_ACTIVE_Q2
+    , uah.NUMBER_OF_SECONDS_ACTIVE_Q3
+    , uah.NUMBER_OF_SECONDS_ACTIVE_Q4
+    , da.ACTIVITY_NAME
+    , da.DISPLAY_NAME
+    , da.ACTIVITY_DESCRIPTOR
+FROM UAL_ACTIVITY_HOURS uah
+LEFT JOIN DESKTOP_ACTIVITY DA
+    ON uah.ACTIVITY_ID = DA.ACTIVITY_ID
+WHERE uah.PAT_ENC_CSN_ID IN (
+    SELECT PAT_ENC_CSN_ID FROM date_filtered_enc
+)
