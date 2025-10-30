@@ -1,0 +1,31 @@
+SELECT
+    dep.DEPARTMENT_ID
+    , dep.DEPARTMENT_NAME
+    , dep.DEPT_ABBREVIATION
+    , dep.SPECIALTY
+    , dep.REV_LOC_ID
+    , revloc.LOC_NAME AS REV_LOC_NAME
+    , dep.ADT_PARENT_ID
+    , adtloc.LOC_NAME AS ADT_PARENT_NAME
+    , dep.SERV_AREA_ID
+    , csa.SERV_AREA_NAME
+    , csa.SERV_AREA_TYPE 
+    , dep.LICENSED_BEDS
+    , dep.ADT_UNIT_TYPE_C
+    , zaut.NAME AS ADT_UNIT_TYPE_NAME
+    , dep.COST_CENTER_ID
+    , ccc.COST_CENTER_NAME
+    , dep.EXTERNAL_NAME
+    , dep.FACILITY_C
+FROM CLARITTY_DEP dep
+LEFT JOIN CLARITY_LOC revloc
+    ON dep.REV_LOC_ID = revloc.LOC_ID
+LEFT JOIN CLARITY_LOC adtloc
+    ON dep.ADT_PARENT_ID = adtloc.LOC_ID
+LEFT JOIN CLARITY_SA csa
+    on dep.SERV_AREA_ID = csa.SERV_AREA_ID
+LEFT JOIN ZC_ADT_UNIT_TYPE zaut
+    ON dep.ADT_UNIT_TYPE_C = zaut.ADT_UNIT_TYPE_C
+LEFT JOIN CL_COST_CNTR ccc
+    ON dep.COST_CENTER_ID = ccc.COST_CNTR_ID
+where dep.RECORD_STATUS = 0
