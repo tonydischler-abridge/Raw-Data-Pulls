@@ -1,0 +1,105 @@
+WITH
+DATE_PARAMS AS (
+    SELECT
+            CAST('2023-04-01' AS date) AS START_DATE,
+            DATEADD(DAY, -1, CAST(GETDATE() AS date)) AS END_DATE
+),
+
+date_filtered_enc AS (
+    SELECT 
+        e.PAT_ENC_CSN_ID, 
+        e.CONTACT_DATE
+    FROM PAT_ENC e
+    CROSS JOIN DATE_PARAMS dp
+    WHERE e.CONTACT_DATE >= dp.START_DATE
+        AND e.CONTACT_DATE <= dp.END_DATE
+        AND e.ENC_TYPE_C IN (3,76,101) -- hospital, telemedicine, and office visit -- update as needed
+        AND (e.APPT_STATUS_C IN (2,6) OR e.APPT_STATUS_C IS NULL)
+),
+
+AMBIENT_VIA_SDE AS (
+    SELECT DISTINCT e.PAT_ENC_CSN_ID
+    FROM date_filtered_enc e
+    WHERE EXISTS (
+        SELECT 1
+        FROM SMRTDTA_ELEM_DATA  sde
+        INNER JOIN SMRTDTA_ELEM_VALUE sev
+            ON sev.HLV_ID = sde.HLV_ID
+        WHERE sde.CONTACT_SERIAL_NUM = e.PAT_ENC_CSN_ID
+            AND sde.ELEMENT_ID IN (
+                'EPIC#31000231848','EPIC#31000231852','EPIC#31000231850','EPIC#31000231851','EPIC#31000231856'
+            )
+    )
+),
+
+AMBIENT_VIA_NAS AS (
+    SELECT DISTINCT e.PAT_ENC_CSN_ID
+    FROM date_filtered_enc e
+    WHERE EXISTS (
+        SELECT 1
+        FROM HNO_INFO hno
+        INNER JOIN NOTE_AMBIENT_SECTIONS nas
+            ON nas.NOTE_ID = hno.NOTE_ID
+        WHERE hno.PAT_ENC_CSN_ID = e.PAT_ENC_CSN_ID
+            AND nas.AMBIENT_SESSION_IDENT IS NOT NULL
+    )
+),
+
+AMBIENT_VIA_ATTR AS (
+    SELECT DISTINCT e.PAT_ENC_CSN_ID
+    FROM date_filtered_enc e
+    WHERE EXISTS (
+        SELECT 1
+        FROM HNO_INFO hno
+        INNER JOIN NOTE_ATTRIBUTION na
+            ON na.NOTE_ID = hno.NOTE_ID
+        WHERE hno.PAT_ENC_CSN_ID = e.PAT_ENC_CSN_ID
+            AND na.NOTEATTR_SOURCE_C = 25
+    )
+),
+
+AMBIENT_VIA_DXR AS (
+    SELECT DISTINCT e.PAT_ENC_CSN_ID
+    FROM date_filtered_enc e
+    WHERE EXISTS (
+        SELECT 1
+        FROM DOCS_RCVD_DETAILS d
+        INNER JOIN DOCS_RCVD_NOTE_SECTIONS n
+            ON n.DOCUMENT_ID = d.DOCUMENT_ID
+        WHERE d.DOCUMENT_RQST_CSN = e.PAT_ENC_CSN_ID
+            AND d.DOCUMENT_RQST_CSN IS NOT NULL
+    )
+),
+
+ALL_AMBIENT AS (
+    SELECT PAT_ENC_CSN_ID FROM AMBIENT_VIA_SDE
+    UNION
+    SELECT PAT_ENC_CSN_ID FROM AMBIENT_VIA_NAS
+    UNION
+    SELECT PAT_ENC_CSN_ID FROM AMBIENT_VIA_ATTR
+    UNION
+    SELECT PAT_ENC_CSN_ID FROM AMBIENT_VIA_DXR
+)
+
+SELECT
+    cdi.QUERY_IDENT,
+    cdi.PAT_ENC_CSN_ID,
+    CASE WHEN cdi.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG,
+    cdi.CDI_QRY_TYPE_NAME              AS cdi_query_type,
+    cdi.CODING_QRY_TYPE_NAME           AS coding_query_type,
+    cdi.RECIPIENT_PROV_ID,
+    ser.PROV_NAME,
+    cdi.RESPONDING_PROV_ID,
+    cdi.RECIPIENT_PROV_NPI_ID,
+    cdi.RESPONDING_PROV_NPI_ID,
+    cdi.QUERY_STATUS_NAME,
+    cdi.NLP_STATUS_NAME,
+    cdi.QUERY_OUTCOME_NAME,
+    cdi.CREATION_DTTM,
+    cdi.UPDATE_DTTM,
+    cdi.TOTAL_TIME_ASSIGNED
+FROM V_CLIN_DOC_QUERY_INFO cdi
+INNER JOIN date_filtered_enc dfe
+    ON dfe.PAT_ENC_CSN_ID = cdi.PAT_ENC_CSN_ID
+LEFT JOIN CLARITY_SER ser
+    ON ser.PROV_ID = cdi.RECIPIENT_PROV_ID
