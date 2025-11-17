@@ -82,20 +82,20 @@ ALL_AMBIENT AS (
 )
 
 SELECT 
-    penc.PAT_ENC_CSN_ID,
-    CASE WHEN penc.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG,
-    penc.PAT_ID,
-    nas.AMBIENT_SESSION_IDENT,
-    penc.ENC_TYPE_C encounter_type_code,
-    zenc.NAME encounter_type_name,
-    penc.FIN_CLASS_C financial_class_code,
-    zfin.NAME financial_class_name,
-    penc.VISIT_PROV_ID,
-    map.CID visit_prov_cid,
-    penc.VISIT_PROV_TITLE,
-    penc.DEPARTMENT_ID,
-    dep.DEPARTMENT_NAME,
-    penc.PAT_ENC_DATE_REAL
+      penc.PAT_ENC_CSN_ID
+    , CASE WHEN penc.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG
+    , penc.PAT_ID
+    , nas.AMBIENT_SESSION_IDENT,
+    , penc.ENC_TYPE_C encounter_type_code
+    , zenc.NAME encounter_type_name
+    , penc.FIN_CLASS_C financial_class_code
+    , zfin.NAME financial_class_name
+    , penc.VISIT_PROV_ID
+    , map.CID visit_prov_cid,
+    , penc.VISIT_PROV_TITLE
+    , penc.DEPARTMENT_ID
+    , dep.DEPARTMENT_NAME
+    , penc.PAT_ENC_DATE_REAL
     , penc.ENC_CLOSE_DATE
     , penc.ENC_CLOSE_TIME
     , penc.APPT_TIME
@@ -111,7 +111,7 @@ SELECT
     , vlos.CALCULATED_LOS
     , rvu.CPT_CODE
     , rvu.PROCEDURE_CODE
-    ,rvu.PROCEDURE_NAME
+    , rvu.PROCEDURE_NAME
     , rvu.PROCEDURE_QUANTITY
     , rvu.AMOUNT billed_amount
     , rvu.RVU_WORK
