@@ -91,8 +91,6 @@ SELECT
     , penc.FIN_CLASS_C financial_class_code
     , zfin.NAME financial_class_name
     , penc.VISIT_PROV_ID
-    , map.CID visit_prov_cid,
-    , penc.VISIT_PROV_TITLE
     , penc.DEPARTMENT_ID
     , dep.DEPARTMENT_NAME
     , penc.PAT_ENC_DATE_REAL
@@ -142,8 +140,6 @@ LEFT JOIN V_ARPB_RVU_DATA rvu
     on arpb.TX_ID = rvu.TRANSACTION_ID
 LEFT JOIN ZC_SPECIALTY zsp 
     ON arpb.PROV_SPECIALTY_C = zsp.SPECIALTY_C
-LEFT JOIN SER_MAP map
-    on penc.VISIT_PROV_ID = map.INTERNAL_ID
 WHERE penc.PAT_ENC_CSN_ID IN (
     SELECT PAT_ENC_CSN_ID FROM date_filtered_enc
 )
