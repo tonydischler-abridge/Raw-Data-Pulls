@@ -83,6 +83,7 @@ ALL_AMBIENT AS (
 
 SELECT 
     arpb.PAT_ENC_CSN_ID,
+    penc.LOS_PROC_CODE,
     CASE WHEN arpb.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG,
     arpb.TX_ID,
     rvu.CPT_CODE,
@@ -96,11 +97,43 @@ SELECT
     arpb.PRIMARY_DX_ID,
     arpb.PROV_SPECIALTY_C prov_specialty_code,
     zsp.NAME prov_specialty_name,
-    rvu.BILL_AREA_NAME
+    rvu.BILL_AREA_NAME,
+    -- Hospital Account Information
+    ha.HSP_ACCOUNT_ID,
+    ha.HSP_BASECLS_HA_C,
+    ha.ACCT_BILLED_DATE,
+    ha.ACCT_FIN_CLASS_C,
+    ha.ATTENDING_PROV_ID,
+    ha.HSP_ADM_DATE_TIME,
+    ha.DISCH_DATE_TIME,
+    ha.ER_ADMIT_DATE_TIME,
+    ha.ER_DSCHG_DATE_TIME,
+    ha.FINAL_DRG_ID,
+    -- Collections Ratio Information
+    atcr.NET_COLL_RATIO,
+    atcr.ACTUAL_AR_COLLECTIONS,
+    atcr.EXPECTED_AR_COLLECTIONS,
+    -- Denials Information
+    bdc.BDC_NAME,
+    bdc.RECORD_TYPE_C AS BDC_RECORD_TYPE,
+    bdc.BDC_CREATE_DATE,
+    bdc.BDC_COMPLETE_VOID_DATE,
+    bdc.DENIAL_CATEGORY_C,
+    bdc.IS_INITIAL_DENIAL_YN
 FROM ARPB_TRANSACTIONS arpb
 INNER JOIN date_filtered_enc dfe
     ON arpb.PAT_ENC_CSN_ID = dfe.PAT_ENC_CSN_ID
 LEFT JOIN V_ARPB_RVU_DATA rvu 
     ON arpb.TX_ID = rvu.TRANSACTION_ID
+LEFT JOIN V_PAT_ENC penc
+    ON arpb.PAT_ENC_CSN_ID = penc.PAT_ENC_CSN_ID
 LEFT JOIN ZC_SPECIALTY zsp 
     ON arpb.PROV_SPECIALTY_C = zsp.SPECIALTY_C
+LEFT JOIN HSP_ACCOUNT ha
+    ON penc.HSP_ACCOUNT_ID = ha.HSP_ACCOUNT_ID
+LEFT JOIN ARPB_TX_COLL_RATIO atcr
+    ON arpb.TX_ID = atcr.TX_ID
+LEFT JOIN INVOICE inv
+    ON ha.HSP_ACCOUNT_ID = inv.PB_HOSP_ACT_ID
+LEFT JOIN BDC_INFO bdc
+    ON inv.INVOICE_ID = bdc.PB_INVOICE_ID
