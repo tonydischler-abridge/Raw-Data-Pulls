@@ -98,7 +98,6 @@ SELECT
     arpb.PROV_SPECIALTY_C prov_specialty_code,
     zsp.NAME prov_specialty_name,
     rvu.BILL_AREA_NAME,
-    -- Hospital Account Information
     ha.HSP_ACCOUNT_ID,
     ha.HSP_BASECLS_HA_C,
     ha.ACCT_BILLED_DATE,
@@ -109,11 +108,9 @@ SELECT
     ha.ER_ADMIT_DATE_TIME,
     ha.ER_DSCHG_DATE_TIME,
     ha.FINAL_DRG_ID,
-    -- Collections Ratio Information
     atcr.NET_COLL_RATIO,
     atcr.ACTUAL_AR_COLLECTIONS,
     atcr.EXPECTED_AR_COLLECTIONS,
-    -- Denials Information
     bdc.BDC_NAME,
     bdc.RECORD_TYPE_C AS BDC_RECORD_TYPE,
     bdc.BDC_CREATE_DATE,
