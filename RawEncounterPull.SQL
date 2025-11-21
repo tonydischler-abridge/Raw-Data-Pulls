@@ -84,7 +84,6 @@ ALL_AMBIENT AS (
 SELECT 
     penc.PAT_ENC_CSN_ID,
     CASE WHEN penc.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG,
-    penc.PAT_ID,
     nas.AMBIENT_SESSION_IDENT,
     penc.ENC_TYPE_C encounter_type_code,
     zenc.NAME encounter_type_name,
