@@ -91,7 +91,8 @@ select
     , zns.NAME note_source_name
     , hno.ENTRY_USER_ID
     , hno.ENTRY_DATETIME
-    , nwt.LENGTH_OF_EDIT note_length_of_edit_seconds
+    , nwt.LENGTH_OF_EDIT --note_length_of_edit_seconds
+    , nwt.WRITE_USER_ID --User for given editing sessions
     , vnc.AUTHOR_SUM
     , vnc.TOTAL_NOTE_LENGTH
     , vnc.NOTE_FILE_DTTM
