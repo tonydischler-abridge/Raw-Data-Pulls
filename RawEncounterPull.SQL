@@ -92,7 +92,6 @@ SELECT
     zfin.NAME financial_class_name,
     penc.VISIT_PROV_ID,
     penc.DEPARTMENT_ID,
-    dep.DEPARTMENT_NAME,
     penc.PAT_ENC_DATE_REAL,
     penc.ENC_CLOSE_DATE,
     penc.ENC_CLOSE_TIME,
@@ -116,8 +115,6 @@ LEFT JOIN ZC_ENC_TYPE zenc
     ON penc.ENC_TYPE_C = zenc.ENC_TYPE_C
 LEFT JOIN ZC_FIN_CLASS zfin 
     ON penc.FIN_CLASS_C = zfin.FIN_CLASS_C
-LEFT JOIN CLARITY_DEP dep 
-    ON penc.DEPARTMENT_ID = dep.DEPARTMENT_ID
 LEFT JOIN PAT_ENC_2 penc2 
     ON penc.PAT_ENC_CSN_ID = penc2.PAT_ENC_CSN_ID
 LEFT JOIN V_PAT_ENC_CALCULATED_LOS vlos 
