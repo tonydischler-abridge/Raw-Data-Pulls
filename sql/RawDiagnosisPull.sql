@@ -1,3 +1,18 @@
+/*
+================================================================================
+  RawDiagnosisPull.sql
+  Grain:    1 row per diagnosis per encounter (PAT_ENC_CSN_ID + DX_ID + LINE)
+  Purpose:  Encounter diagnosis fact — ICD-10 codes, chronic flags, HCC categories
+  Doc:      ../docs/RawDiagnosisPull.md
+
+  ℹ️  PAT_ENC_DX PK is composite (PAT_ENC_CSN_ID + LINE). A single encounter can
+      have multiple diagnoses; LINE differentiates them (LINE 1 = primary).
+  ⚠️  CURRENT_ICD9_LIST is deprecated — most partners will have NULL values.
+      Use CURRENT_ICD10_LIST for all active coding.
+
+  CONFIGURE: Update START_DATE in DATE_PARAMS to partner's Abridge go-live date.
+================================================================================
+*/
 WITH
 DATE_PARAMS AS (
     SELECT
@@ -81,47 +96,24 @@ ALL_AMBIENT AS (
     SELECT PAT_ENC_CSN_ID FROM AMBIENT_VIA_DXR
 )
 
-select
-    hno.NOTE_ID
-    , hno.PAT_ENC_CSN_ID
-    , CASE WHEN hno.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG
-    , hno.NOTE_TYPE_NOADD_C note_type_code
-    , znt.NAME note_type_name
-    , hno.NOTE_SOURCE_C note_source_code
-    , zns.NAME note_source_name
-    , hno.ENTRY_USER_ID
-    , hno.ENTRY_DATETIME
-    , nwt.LENGTH_OF_EDIT --note_length_of_edit_seconds
-    , nwt.WRITE_USER_ID --User for given editing sessions
-    , vnc.AUTHOR_SUM
-    , vnc.TOTAL_NOTE_LENGTH
-    , vnc.NOTE_FILE_DTTM
-    , vnc.DATE_OF_SERVICE_DTTM
-    , vnc.AUTHOR_LINKED_PROV_ID
-    , map.CID author_linked_prov_cid
-    , vnc.AUTHOR_LOGIN_DEPARTMENT_ID
-    , vnc.AUTHOR_LOGIN_DEPARTMENT_NAME
-    , vnc.VOICE_RECOGNITION_SUM
-    , natr.NOTEATTR_SOURCE_C note_attribution_source_code
-    , znsr.NAME note_attribution_source_name
-    , natr.NOTEATTR_CHAR_COUNT
-from HNO_INFO hno
-LEFT JOIN PAT_ENC penc
-    ON hno.PAT_ENC_CSN_ID = penc.PAT_ENC_CSN_ID
-left join ZC_NOTE_TYPE znt 
-    on hno.NOTE_TYPE_NOADD_C = znt.NOTE_TYPE_C
-left join ZC_NOTE_SOURCE zns 
-    on hno.NOTE_SOURCE_C = zns.NOTE_SOURCE_C
-LEFT JOIN NOTE_WRITE_TIMING nwt 
-    ON nwt.NOTE_ID = hno.NOTE_ID and nwt.WRITE_USER_ID = hno.ENTRY_USER_ID
-LEFT JOIN V_NOTE_CHARACTERISTICS vnc 
-    ON vnc.NOTE_ID = hno.NOTE_ID
-LEFT JOIN NOTE_ATTRIBUTION natr 
-    ON natr.NOTE_ID = hno.NOTE_ID
-LEFT JOIN SER_MAP map 
-    ON vnc.AUTHOR_LINKED_PROV_ID = map.INTERNAL_ID
-LEFT JOIN ZC_NOTEATTR_SOURCE znsr 
-    ON natr.NOTEATTR_SOURCE_C = znsr.NOTEATTR_SOURCE_C
-WHERE hno.PAT_ENC_CSN_ID IN (
-    SELECT PAT_ENC_CSN_ID FROM date_filtered_enc
-)
+SELECT 
+    pedx.PAT_ENC_CSN_ID,
+    CASE WHEN pedx.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG,
+    pedx.CONTACT_DATE,
+    pedx.DX_ID,
+    pedx.PRIMARY_DX_YN,
+    pedx.DX_CHRONIC_YN,
+    ercd.DX_HCC_C,
+    edg.DX_NAME,
+    edg.RECORD_STATE_C,
+    edg.REF_BILL_CODE_SET_C,
+    edg.RECORD_TYPE_C,
+    edg.CURRENT_ICD9_LIST,
+    edg.CURRENT_ICD10_LIST
+FROM PAT_ENC_DX pedx
+INNER JOIN date_filtered_enc dfe
+    ON pedx.PAT_ENC_CSN_ID = dfe.PAT_ENC_CSN_ID
+LEFT JOIN EDG_RISK_CATEGORY_DATA ercd
+    ON pedx.DX_ID = ercd.DX_ID
+LEFT JOIN CLARITY_EDG edg
+    ON pedx.DX_ID = edg.DX_ID

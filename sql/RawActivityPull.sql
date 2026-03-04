@@ -1,3 +1,24 @@
+/*
+================================================================================
+  RawActivityPull.sql
+  Grain:    1 row per user activity hour bucket per encounter (UAL_ACTIVITY_HOUR_KEY)
+  Purpose:  EHR user activity / time-in-chart fact — seconds active per activity type
+  Doc:      ../docs/RawActivityPull.md
+
+  ℹ️  UAL_ACTIVITY_HOURS uses APPEND load type — rows accumulate over time and are
+      never replaced. Do not use incremental refresh logic; always union/append.
+  ℹ️  TIME is bucketed by hour; _Q1–_Q4 columns split active seconds into 15-min
+      quarters within that hour bucket.
+  ⚠️  No PROV_ID on UAL_ACTIVITY_HOURS. To get provider, join USER_ID to
+      CLARITY_EMP.USER_ID → CLARITY_EMP.PROV_ID, then to CLARITY_SER.
+  ℹ️  NAVIGATOR_SECTIONS join only applies when HISTORY_POINT_INI = 'LVN'.
+      For other INI values, SECTION_CAPTION/SECTION_NAME will be NULL.
+  ℹ️  UAL data contains NO EHI (Electronic Health Information) — safe to load
+      separately from PHI-sensitive tables.
+
+  CONFIGURE: Update START_DATE in DATE_PARAMS to partner's Abridge go-live date.
+================================================================================
+*/
 WITH
 DATE_PARAMS AS (
     SELECT
@@ -82,23 +103,34 @@ ALL_AMBIENT AS (
 )
 
 SELECT 
-    pedx.PAT_ENC_CSN_ID,
-    CASE WHEN pedx.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG,
-    pedx.CONTACT_DATE,
-    pedx.DX_ID,
-    pedx.PRIMARY_DX_YN,
-    pedx.DX_CHRONIC_YN,
-    ercd.DX_HCC_C,
-    edg.DX_NAME,
-    edg.RECORD_STATE_C,
-    edg.REF_BILL_CODE_SET_C,
-    edg.RECORD_TYPE_C,
-    edg.CURRENT_ICD9_LIST,
-    edg.CURRENT_ICD10_LIST
-FROM PAT_ENC_DX pedx
-INNER JOIN date_filtered_enc dfe
-    ON pedx.PAT_ENC_CSN_ID = dfe.PAT_ENC_CSN_ID
-LEFT JOIN EDG_RISK_CATEGORY_DATA ercd
-    ON pedx.DX_ID = ercd.DX_ID
-LEFT JOIN CLARITY_EDG edg
-    ON pedx.DX_ID = edg.DX_ID
+    uah.USER_ID
+    , uah.PAT_ENC_CSN_ID
+    , CASE WHEN uah.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG
+    , uah.ACTIVITY_ID
+    , uah.ACTIVITY_HOUR_DTTM
+    , uah.ACTIVITY_HOUR_UTC_DTTM
+    , uah.WORKSPACE_KIND
+    , uah.WORKSPACE_SUBKIND
+    , uah.HISTORY_POINT_INI
+    , uah.HISTORY_POINT_ID
+    , uah.HISTORY_POINT_ITEM
+    , uah.NUMBER_OF_SECONDS_ACTIVE
+    , uah.NUMBER_OF_SECONDS_ACTIVE_Q1
+    , uah.NUMBER_OF_SECONDS_ACTIVE_Q2
+    , uah.NUMBER_OF_SECONDS_ACTIVE_Q3
+    , uah.NUMBER_OF_SECONDS_ACTIVE_Q4
+    , da.ACTIVITY_NAME
+    , da.DISPLAY_NAME
+    , da.ACTIVITY_DESCRIPTOR
+    , ns.SECTION_CAPTION
+    , ns.SECTION_NAME
+    , ns.SECTION_DESCRIPTOR
+FROM UAL_ACTIVITY_HOURS uah
+LEFT JOIN DESKTOP_ACTIVITY DA
+    ON uah.ACTIVITY_ID = DA.ACTIVITY_ID
+LEFT JOIN NAVIGATOR_SECTIONS ns
+    on uah.HISTORY_POINT_ID = ns.NAVIGATOR_ID
+    AND uah.HISTORY_POINT_INI = 'LVN'
+WHERE uah.PAT_ENC_CSN_ID IN (
+    SELECT PAT_ENC_CSN_ID FROM date_filtered_enc
+)

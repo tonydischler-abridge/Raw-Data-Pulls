@@ -1,3 +1,20 @@
+/*
+================================================================================
+  RawTransactionPull.sql
+  Grain:    1 row per professional billing transaction (TX_ID)
+  Purpose:  Billing/financial fact table — CPT codes, wRVUs, collections, denials
+  Doc:      ../docs/RawTransactionPull.md
+
+  ⚠️  INVOICE → BDC_INFO can fan-out if multiple denial records exist per invoice.
+      Consider filtering to IS_INITIAL_DENIAL_YN = 'Y' or building a separate
+      denial table downstream.
+  ℹ️  V_ARPB_RVU_DATA and ARPB_TX_COLL_RATIO only populate for charge transactions
+      (TRAN_TYPE = 1). Other transaction types (payments, adjustments, etc.) will
+      have NULLs in those columns.
+
+  CONFIGURE: Update START_DATE in DATE_PARAMS to partner's Abridge go-live date.
+================================================================================
+*/
 WITH
 DATE_PARAMS AS (
     SELECT

@@ -1,3 +1,18 @@
+/*
+================================================================================
+  RawEncounterPull.sql
+  Grain:    1 row per patient encounter (PAT_ENC_CSN_ID)
+  Purpose:  Core encounter fact table — foundation for all raw data joins
+  Doc:      ../docs/RawEncounterPull.md
+
+  ⚠️ KNOWN ISSUE: LEFT JOIN to HNO_INFO + NOTE_AMBIENT_SECTIONS in SELECT
+     can fan-out if multiple ambient notes exist per encounter.
+     Remove nas.AMBIENT_SESSION_IDENT from SELECT if 1-row-per-CSN is required.
+
+  CONFIGURE: Update START_DATE in DATE_PARAMS to partner's Abridge go-live date.
+             Review ENC_TYPE_C values for partner-specific encounter types.
+================================================================================
+*/
 WITH
 DATE_PARAMS AS (
     SELECT
@@ -82,34 +97,43 @@ ALL_AMBIENT AS (
 )
 
 SELECT 
-    uah.USER_ID
-    , uah.PAT_ENC_CSN_ID
-    , CASE WHEN uah.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG
-    , uah.ACTIVITY_ID
-    , uah.ACTIVITY_HOUR_DTTM
-    , uah.ACTIVITY_HOUR_UTC_DTTM
-    , uah.WORKSPACE_KIND
-    , uah.WORKSPACE_SUBKIND
-    , uah.HISTORY_POINT_INI
-    , uah.HISTORY_POINT_ID
-    , uah.HISTORY_POINT_ITEM
-    , uah.NUMBER_OF_SECONDS_ACTIVE
-    , uah.NUMBER_OF_SECONDS_ACTIVE_Q1
-    , uah.NUMBER_OF_SECONDS_ACTIVE_Q2
-    , uah.NUMBER_OF_SECONDS_ACTIVE_Q3
-    , uah.NUMBER_OF_SECONDS_ACTIVE_Q4
-    , da.ACTIVITY_NAME
-    , da.DISPLAY_NAME
-    , da.ACTIVITY_DESCRIPTOR
-    , ns.SECTION_CAPTION
-    , ns.SECTION_NAME
-    , ns.SECTION_DESCRIPTOR
-FROM UAL_ACTIVITY_HOURS uah
-LEFT JOIN DESKTOP_ACTIVITY DA
-    ON uah.ACTIVITY_ID = DA.ACTIVITY_ID
-LEFT JOIN NAVIGATOR_SECTIONS ns
-    on uah.HISTORY_POINT_ID = ns.NAVIGATOR_ID
-    AND uah.HISTORY_POINT_INI = 'LVN'
-WHERE uah.PAT_ENC_CSN_ID IN (
+    penc.PAT_ENC_CSN_ID,
+    CASE WHEN penc.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG,
+    nas.AMBIENT_SESSION_IDENT,
+    penc.ENC_TYPE_C encounter_type_code,
+    zenc.NAME encounter_type_name,
+    penc.FIN_CLASS_C financial_class_code,
+    zfin.NAME financial_class_name,
+    penc.VISIT_PROV_ID,
+    penc.DEPARTMENT_ID,
+    penc.PAT_ENC_DATE_REAL,
+    penc.ENC_CLOSE_DATE,
+    penc.ENC_CLOSE_TIME,
+    penc.APPT_TIME,
+    penc.APPT_LENGTH,
+    penc.CHECKIN_TIME,
+    penc.CHECKOUT_TIME,
+    penc.HOSP_ADMSN_TIME,
+    penc.HOSP_DISCHRG_TIME,
+    penc.HSP_ACCOUNT_ID,
+    penc.CLAIM_ID,
+    penc.ATTND_PROV_ID,
+    penc2.VISIT_POS_ID,
+    vlos.CALCULATED_LOS
+FROM PAT_ENC penc
+LEFT JOIN HNO_INFO hno 
+    ON penc.PAT_ENC_CSN_ID = hno.PAT_ENC_CSN_ID
+LEFT JOIN NOTE_AMBIENT_SECTIONS nas 
+    ON hno.NOTE_ID = nas.NOTE_ID
+LEFT JOIN ZC_ENC_TYPE zenc 
+    ON penc.ENC_TYPE_C = zenc.ENC_TYPE_C
+LEFT JOIN ZC_FIN_CLASS zfin 
+    ON penc.FIN_CLASS_C = zfin.FIN_CLASS_C
+LEFT JOIN PAT_ENC_2 penc2 
+    ON penc.PAT_ENC_CSN_ID = penc2.PAT_ENC_CSN_ID
+LEFT JOIN V_PAT_ENC_CALCULATED_LOS vlos 
+    ON penc.PAT_ENC_CSN_ID = vlos.PAT_ENC_CSN_ID
+WHERE penc.PAT_ENC_CSN_ID IN (
     SELECT PAT_ENC_CSN_ID FROM date_filtered_enc
 )
+

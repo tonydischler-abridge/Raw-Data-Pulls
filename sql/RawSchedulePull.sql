@@ -1,3 +1,21 @@
+/*
+================================================================================
+  RawSchedulePull.sql
+  Grain:    1 row per scheduled appointment (PAT_ENC_CSN_ID)
+  Purpose:  Appointment scheduling fact — status, provider, slot length, same-day
+  Doc:      ../docs/RawSchedulePull.md
+
+  ℹ️  F_SCHED_APPT is a derived/aggregate table. It may not contain all historical
+      appointments depending on partner's reporting database refresh schedule.
+  ℹ️  APPT_STATUS_C values: 1=Scheduled, 2=Arrived, 3=No Show, 4=Left w/o Seen,
+      5=Canceled, 6=Completed. The date_filtered_enc CTE pre-filters to 2 and 6.
+  ℹ️  Joint (multi-provider) appointments will appear as separate rows, one per
+      provider. Use PAT_ENC_CSN_ID to collapse back to encounter level if needed.
+
+  CONFIGURE: Update START_DATE in DATE_PARAMS to partner's Abridge go-live date.
+             Review ENC_TYPE_C values for partner-specific encounter types.
+================================================================================
+*/
 WITH
 DATE_PARAMS AS (
     SELECT
@@ -81,25 +99,17 @@ ALL_AMBIENT AS (
     SELECT PAT_ENC_CSN_ID FROM AMBIENT_VIA_DXR
 )
 
-SELECT
-    cdi.QUERY_IDENT,
-    cdi.PAT_ENC_CSN_ID,
-    CASE WHEN cdi.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG,
-    cdi.CDI_QRY_TYPE_NAME              AS cdi_query_type,
-    cdi.CODING_QRY_TYPE_NAME           AS coding_query_type,
-    cdi.RECIPIENT_PROV_ID,
-    ser.PROV_NAME,
-    cdi.RESPONDING_PROV_ID,
-    cdi.RECIPIENT_PROV_NPI_ID,
-    cdi.RESPONDING_PROV_NPI_ID,
-    cdi.QUERY_STATUS_NAME,
-    cdi.NLP_STATUS_NAME,
-    cdi.QUERY_OUTCOME_NAME,
-    cdi.CREATION_DTTM,
-    cdi.UPDATE_DTTM,
-    cdi.TOTAL_TIME_ASSIGNED
-FROM V_CLIN_DOC_QUERY_INFO cdi
+SELECT 
+    fsa.PAT_ENC_CSN_ID,
+    CASE WHEN fsa.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG,
+    fsa.CONTACT_DATE,
+    fsa.PROV_ID,
+    fsa.APPT_STATUS_C,
+    fsa.PRC_ID,
+    fsa.DEPARTMENT_ID,
+    fsa.APPT_DTTM,
+    fsa.APPT_LENGTH,
+    fsa.SAME_DAY_YN
+FROM F_SCHED_APPT fsa
 INNER JOIN date_filtered_enc dfe
-    ON dfe.PAT_ENC_CSN_ID = cdi.PAT_ENC_CSN_ID
-LEFT JOIN CLARITY_SER ser
-    ON ser.PROV_ID = cdi.RECIPIENT_PROV_ID
+    ON fsa.PAT_ENC_CSN_ID = dfe.PAT_ENC_CSN_ID

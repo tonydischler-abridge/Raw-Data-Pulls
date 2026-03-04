@@ -1,3 +1,20 @@
+/*
+================================================================================
+  RawCDIPull.sql
+  Grain:    1 row per CDI query (QUERY_IDENT)
+  Purpose:  Clinical Documentation Integrity query fact — CDI/coding query outcomes
+  Doc:      ../docs/RawCDIPull.md
+
+  ℹ️  Requires the CDI module to be active in the partner's Epic build. If CDI
+      is not licensed or not used, this query will return 0 rows.
+  ℹ️  V_CLIN_DOC_QUERY_INFO is a view — verify it is available in the partner's
+      reporting database. Some older Clarity builds may not expose this view.
+  ℹ️  TOTAL_TIME_ASSIGNED is in seconds. Convert to minutes/hours in reporting layer.
+
+  CONFIGURE: Update START_DATE in DATE_PARAMS to partner's Abridge go-live date.
+             Confirm CDI module is active before deploying to partner.
+================================================================================
+*/
 WITH
 DATE_PARAMS AS (
     SELECT
@@ -81,44 +98,25 @@ ALL_AMBIENT AS (
     SELECT PAT_ENC_CSN_ID FROM AMBIENT_VIA_DXR
 )
 
-SELECT 
-    penc.PAT_ENC_CSN_ID,
-    CASE WHEN penc.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG,
-    nas.AMBIENT_SESSION_IDENT,
-    penc.ENC_TYPE_C encounter_type_code,
-    zenc.NAME encounter_type_name,
-    penc.FIN_CLASS_C financial_class_code,
-    zfin.NAME financial_class_name,
-    penc.VISIT_PROV_ID,
-    penc.DEPARTMENT_ID,
-    penc.PAT_ENC_DATE_REAL,
-    penc.ENC_CLOSE_DATE,
-    penc.ENC_CLOSE_TIME,
-    penc.APPT_TIME,
-    penc.APPT_LENGTH,
-    penc.CHECKIN_TIME,
-    penc.CHECKOUT_TIME,
-    penc.HOSP_ADMSN_TIME,
-    penc.HOSP_DISCHRG_TIME,
-    penc.HSP_ACCOUNT_ID,
-    penc.CLAIM_ID,
-    penc.ATTND_PROV_ID,
-    penc2.VISIT_POS_ID,
-    vlos.CALCULATED_LOS
-FROM PAT_ENC penc
-LEFT JOIN HNO_INFO hno 
-    ON penc.PAT_ENC_CSN_ID = hno.PAT_ENC_CSN_ID
-LEFT JOIN NOTE_AMBIENT_SECTIONS nas 
-    ON hno.NOTE_ID = nas.NOTE_ID
-LEFT JOIN ZC_ENC_TYPE zenc 
-    ON penc.ENC_TYPE_C = zenc.ENC_TYPE_C
-LEFT JOIN ZC_FIN_CLASS zfin 
-    ON penc.FIN_CLASS_C = zfin.FIN_CLASS_C
-LEFT JOIN PAT_ENC_2 penc2 
-    ON penc.PAT_ENC_CSN_ID = penc2.PAT_ENC_CSN_ID
-LEFT JOIN V_PAT_ENC_CALCULATED_LOS vlos 
-    ON penc.PAT_ENC_CSN_ID = vlos.PAT_ENC_CSN_ID
-WHERE penc.PAT_ENC_CSN_ID IN (
-    SELECT PAT_ENC_CSN_ID FROM date_filtered_enc
-)
-
+SELECT
+    cdi.QUERY_IDENT,
+    cdi.PAT_ENC_CSN_ID,
+    CASE WHEN cdi.PAT_ENC_CSN_ID IN (SELECT PAT_ENC_CSN_ID FROM ALL_AMBIENT) THEN 'Y' ELSE 'N' END AS AMBIENT_FLAG,
+    cdi.CDI_QRY_TYPE_NAME              AS cdi_query_type,
+    cdi.CODING_QRY_TYPE_NAME           AS coding_query_type,
+    cdi.RECIPIENT_PROV_ID,
+    ser.PROV_NAME,
+    cdi.RESPONDING_PROV_ID,
+    cdi.RECIPIENT_PROV_NPI_ID,
+    cdi.RESPONDING_PROV_NPI_ID,
+    cdi.QUERY_STATUS_NAME,
+    cdi.NLP_STATUS_NAME,
+    cdi.QUERY_OUTCOME_NAME,
+    cdi.CREATION_DTTM,
+    cdi.UPDATE_DTTM,
+    cdi.TOTAL_TIME_ASSIGNED
+FROM V_CLIN_DOC_QUERY_INFO cdi
+INNER JOIN date_filtered_enc dfe
+    ON dfe.PAT_ENC_CSN_ID = cdi.PAT_ENC_CSN_ID
+LEFT JOIN CLARITY_SER ser
+    ON ser.PROV_ID = cdi.RECIPIENT_PROV_ID

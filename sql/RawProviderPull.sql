@@ -1,6 +1,26 @@
+/*
+================================================================================
+  RawProviderPull.sql
+  Grain:    1 row per provider (PROV_ID)
+  Purpose:  Provider dimension — NPI, type, specialty, employment status, CID
+  Doc:      ../docs/RawProviderPull.md
+
+  ✅  PROV_NAME added — was missing from the original query.
+  ℹ️  PROV_TYPE <> 0 filter excludes resources (rooms, equipment, etc.) and
+      retains all human providers. To restrict to physicians only, add
+      PROVIDER_TYPE_C = '1' in your BI/reporting layer (not here at raw level).
+  ℹ️  SER_MAP (ser_cid) requires IntraConnect license. Remove that column and
+      the LEFT JOIN to SER_MAP if the partner is not licensed for Interconnect.
+  ℹ️  CLARITY_SER_2 is used exclusively to pull NPI and PRIMARY_DEPT_ID.
+      No other columns from CLARITY_SER_2 are needed for standard use cases.
+
+  CONFIGURE: Remove ser_cid / SER_MAP join if IntraConnect is not licensed.
+================================================================================
+*/
 SELECT
     ser.PROV_ID as provider_id
-    , ser2.NPI as npi 
+    , ser.PROV_NAME as provider_name  -- ✅ Added: was missing from original
+    , ser2.NPI as npi
     , ser.PROV_TYPE as provider_type
     , ser.IS_RESIDENT as is_resident
     , ser.USER_ID as user_id
