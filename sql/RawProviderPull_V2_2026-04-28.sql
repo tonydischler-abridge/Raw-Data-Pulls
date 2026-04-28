@@ -7,7 +7,7 @@
 
   V2 CHANGES:
     - Added LEFT JOIN to CLARITY_EMP on USER_ID
-    - Added columns: system_login, emp_name, user_status_code,
+    - Added columns: emp_name, user_status_code,
       user_status_name, emp_primary_department_id
 
   ℹ️  PROV_TYPE <> 0 filter excludes resources (rooms, equipment, etc.) and
@@ -44,7 +44,6 @@ SELECT
     , ser2.PRIMARY_DEPT_ID as primary_department_id
     , ser3.DEPARTURE_DATE as departure_date
     , map.CID as ser_cid -- remove if not licensed for Interconnect
-    , emp.SYSTEM_LOGIN as system_login
     , emp.NAME as emp_name
     , emp.USER_STATUS_C as user_status_code
     , zus.NAME as user_status_name
