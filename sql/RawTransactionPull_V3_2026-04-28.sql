@@ -8,7 +8,8 @@
     - Added columns from ARPB_TRANSACTIONS: POST_DATE, SERVICE_DATE,
       TX_TYPE_C, BILLING_PROV_ID, OUTSTANDING_AMT, INSURANCE_AMT,
       PATIENT_AMT, VOID_DATE
-    - Added enc.CLAIM_ID from PAT_ENC via CSN join (EPT 2209)
+    - Added enc.CLAIM_ID (enc_claim_id) from PAT_ENC via CSN join (EPT 2209)
+    - Added ha.CLAIM_ID (hsp_claim_id) from HSP_ACCOUNT (HAR 120)
     - Added TODO comments for: HSP_BASECLS_HA_C name lookup,
       TX_TYPE_C name lookup
 
@@ -23,8 +24,9 @@
   ℹ️  V_ARPB_RVU_DATA and ARPB_TX_COLL_RATIO only populate for charge transactions
       (TX_TYPE_C = 1). Other transaction types (payments, adjustments, etc.) will
       have NULLs in those columns.
-  ℹ️  ARPB_TRANSACTIONS has no CLAIM_ID column. CLAIM_ID is pulled from
-      PAT_ENC (EPT 2209) via a direct LEFT JOIN on PAT_ENC_CSN_ID.
+  ℹ️  ARPB_TRANSACTIONS has no CLAIM_ID column. Two claim IDs are provided:
+      enc_claim_id from PAT_ENC (EPT 2209) and hsp_claim_id from HSP_ACCOUNT
+      (HAR 120). HSP_ACCOUNT.CLAIM_ID is marked Not Exported — verify per partner.
 
   CONFIGURE: Update START_DATE in DATE_PARAMS to partner's Abridge go-live date.
 ================================================================================
@@ -74,7 +76,8 @@ SELECT
     rvu.BILL_AREA_NAME,
     ha.HSP_ACCOUNT_ID,
     ha.HSP_BASECLS_HA_C, -- TODO: add ZC_ACCT_BASECLS_HA join for base class name
-    enc.CLAIM_ID,
+    enc.CLAIM_ID enc_claim_id,
+    ha.CLAIM_ID hsp_claim_id, -- HAR 120; marked Not Exported — verify availability per partner
     ha.ACCT_BILLED_DATE,
     ha.ACCT_FIN_CLASS_C,
     ha.ATTENDING_PROV_ID,
